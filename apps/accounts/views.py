@@ -37,10 +37,10 @@ def user_list(request):
     """
     # 获取用户及其相关统计数据
     users = User.objects.select_related().prefetch_related(
-        'workentry_set', 'report_set'
+        'work_entries', 'reports'
     ).annotate(
-        work_count=Count('workentry_set', distinct=True),
-        report_count=Count('report_set', distinct=True)
+        work_count=Count('work_entries', distinct=True),
+        report_count=Count('reports', distinct=True)
     ).order_by("-date_joined")
     
     # 为每个用户添加额外信息
