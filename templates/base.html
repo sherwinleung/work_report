@@ -30,7 +30,10 @@
           <!-- 右侧用户信息 -->
           <div class="navbar-user-section ms-auto">
             <span class="navbar-text me-3">{{ user.email }}</span>
-            <a class="btn btn-outline-primary btn-sm" href="/accounts/logout/">退出</a>
+            <form method="post" action="/accounts/logout/" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-primary btn-sm">退出</button>
+            </form>
           </div>
         {% else %}
           <a class="navbar-brand" href="/dashboard/">WorkReport</a>
