@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>工作日报</h3>
+<form method="post" class="row g-3 mb-4">
+  {% csrf_token %}
+  <div class="col-12 col-md-3">
+    <label class="form-label">日期</label>
+    <input class="form-control" type="date" name="date" required>
+  </div>
+  <div class="col-12 col-md-3">
+    <label class="form-label">时间段</label>
+    <div class="d-flex gap-2">
+      <input class="form-control" type="time" name="start_time" step="300" placeholder="开始">
+      <input class="form-control" type="time" name="end_time" step="300" placeholder="结束">
+    </div>
+    <div class="form-text">支持跨午夜（结束小于开始视为次日）。</div>
+  </div>
+  <div class="col-12 col-md-6">
+    <label class="form-label">内容 / 标题（可选）</label>
+    <div class="d-flex gap-2">
+      <input class="form-control" type="text" name="title" placeholder="标题（可选）">
+      <input class="form-control" type="text" name="content" placeholder="简要描述..." required>
+    </div>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">添加</button>
+  </div>
+</form>
+
+<div class="card"><div class="card-body">
+  <table class="table table-striped table-sm">
+    <thead><tr><th>日期</th><th>时间段</th><th>标题</th><th>内容</th><th>时长(小时)</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+        <tr>
+          <td>{{ it.obj.date }}</td>
+          <td>{% if it.obj.start_time %}{{ it.obj.start_time }} - {{ it.obj.end_time }}{% else %}-{% endif %}</td>
+          <td>{{ it.obj.title }}</td>
+          <td style="max-width:600px">{{ it.obj.content }}</td>
+          <td>{{ it.hours }}</td>
+          <td><a class="btn btn-sm btn-outline-danger" href="/work/{{ it.obj.id }}/delete/">删除</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">暂无记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

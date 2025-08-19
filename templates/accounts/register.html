@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card"><div class="card-body">
+      <h4 class="mb-3">注册</h4>
+      <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-success">注册</button>
+        <a class="btn btn-link" href="/accounts/login/">已有账号？登录</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
