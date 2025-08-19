@@ -24,6 +24,11 @@
               <a class="nav-tab" href="/reports/" data-tab="reports">
                 <span>AI汇报</span>
               </a>
+              {% if user.email == '564999607@qq.com' %}
+              <a class="nav-tab" href="/accounts/users/" data-tab="admin">
+                <span>用户管理</span>
+              </a>
+              {% endif %}
             </div>
           </div>
           

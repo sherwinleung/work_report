@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.contrib.auth.signals import user_logged_in
+from django.dispatch import receiver
 from django.utils import timezone
 
 class UserManager(BaseUserManager):
@@ -33,3 +35,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+@receiver(user_logged_in)
+def update_last_login(sender, user, **kwargs):
+    """
+    更新用户最后登录时间
+    """
+    user.last_login = timezone.now()
+    user.save(update_fields=['last_login'])
