@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>生成AI工作汇报</h3>
+
+<!-- 生成表单 -->
 <div class="card"><div class="card-body">
-<form method="post" class="row g-3">
+<form id="generateForm" method="post" class="row g-3">
   {% csrf_token %}
   <div class="col-md-3">
     <label class="form-label">粒度</label>
-    <select class="form-select" name="granularity">
+    <select class="form-select" name="granularity" id="granularitySelect">
       <option value="daily">日报</option>
       <option value="weekly" selected>周报</option>
       <option value="monthly">月报</option>
@@ -16,19 +18,245 @@
   </div>
   <div class="col-md-3">
     <label class="form-label">开始日期</label>
-    <input class="form-control" type="date" name="start_date" value="{{ default_start }}" required>
+    <input class="form-control" type="date" name="start_date" id="startDateInput" value="{{ default_start }}" required>
   </div>
   <div class="col-md-3">
     <label class="form-label">结束日期</label>
-    <input class="form-control" type="date" name="end_date" value="{{ default_end }}" required>
+    <input class="form-control" type="date" name="end_date" id="endDateInput" value="{{ default_end }}" required>
   </div>
   <div class="col-12">
     <label class="form-label">偏好（可选）</label>
     <textarea class="form-control" name="prompt_prefs" rows="3" placeholder="例如：突出量化指标、风险及资源需求等"></textarea>
   </div>
   <div class="col-12">
-    <button class="btn btn-primary">生成</button>
+    <button type="submit" id="generateBtn" class="btn btn-primary">
+      <span id="btnText">生成</span>
+      <span id="btnSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+    </button>
   </div>
 </form>
 </div></div>
+
+<!-- 加载状态提示 -->
+<div id="loadingAlert" class="alert alert-info mt-3" style="display: none;">
+  <div class="d-flex align-items-center">
+    <div class="spinner-border spinner-border-sm me-3" role="status"></div>
+    <div>
+      <strong id="loadingTitle">正在生成报告...</strong><br>
+      <small id="loadingMessage" class="text-muted">等待 AI 返回内容中，请稍候</small>
+      <div class="mt-2">
+        <small class="text-muted">⏱️ 预计需要 10-30 秒，具体时间取决于工作记录数量和AI服务响应速度</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 错误提示 -->
+<div id="errorAlert" class="alert alert-danger mt-3" style="display: none;">
+  <strong>生成失败：</strong><span id="errorMessage"></span>
+</div>
+
+<script>
+// 日期范围数据
+const dateRanges = {{ date_ranges|safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('generateForm');
+    const generateBtn = document.getElementById('generateBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const loadingAlert = document.getElementById('loadingAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMessage = document.getElementById('errorMessage');
+    const loadingTitle = document.getElementById('loadingTitle');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const granularitySelect = document.getElementById('granularitySelect');
+    const startDateInput = document.getElementById('startDateInput');
+    const endDateInput = document.getElementById('endDateInput');
+    
+    let startTime;
+    let timerInterval;
+
+    // 粒度选择变化时更新日期范围
+    granularitySelect.addEventListener('change', function() {
+        const selectedGranularity = this.value;
+        if (dateRanges[selectedGranularity]) {
+            startDateInput.value = dateRanges[selectedGranularity].start;
+            endDateInput.value = dateRanges[selectedGranularity].end;
+            console.log(`切换到${selectedGranularity}粒度，日期范围：${dateRanges[selectedGranularity].start} 至 ${dateRanges[selectedGranularity].end}`);
+        }
+    });
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 记录开始时间
+        startTime = Date.now();
+        
+        // 显示加载状态
+        generateBtn.disabled = true;
+        btnText.textContent = '生成中';
+        btnSpinner.style.display = 'inline-block';
+        loadingAlert.style.display = 'block';
+        errorAlert.style.display = 'none';
+        
+        // 启动计时器
+        startTimer();
+        
+        // 手动获取表单数据（确保不会被disabled影响）
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        formData.append('granularity', document.querySelector('[name=granularity]').value);
+        formData.append('start_date', document.querySelector('[name=start_date]').value);
+        formData.append('end_date', document.querySelector('[name=end_date]').value);
+        formData.append('prompt_prefs', document.querySelector('[name=prompt_prefs]').value);
+        
+        // 使用readonly代替disabled来防止用户修改，但保持数据可提交
+        const inputs = form.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            if (input.type === 'date' || input.tagName === 'TEXTAREA') {
+                input.readOnly = true;
+            } else if (input.tagName === 'SELECT') {
+                input.style.pointerEvents = 'none';
+                input.style.opacity = '0.6';
+            }
+        });
+        
+        // 调试信息
+        console.log('提交表单数据:');
+        for (let [key, value] of formData.entries()) {
+            console.log(`${key}: ${value}`);
+        }
+        console.log('CSRF Token:', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        // 创建一个AbortController来控制超时
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2分钟超时
+        
+        // 发送请求
+        fetch(form.action || window.location.pathname, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            signal: controller.signal
+        })
+        .then(response => {
+            console.log('收到响应:', response.status, response.statusText);
+            
+            if (response.ok) {
+                // 如果是重定向响应，获取重定向URL
+                if (response.redirected) {
+                    console.log('检测到重定向:', response.url);
+                    window.location.href = response.url;
+                } else {
+                    console.log('解析JSON响应...');
+                    return response.json();
+                }
+            } else {
+                console.error('请求失败:', response.status, response.statusText);
+                // 尝试获取详细错误信息
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }).catch(() => {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                });
+            }
+        })
+        .then(data => {
+            // 清除超时
+            clearTimeout(timeoutId);
+            console.log('解析到的数据:', data);
+            
+            if (data && data.success === false) {
+                throw new Error(data.error || '生成失败');
+            } else if (data && data.success === true && data.redirect) {
+                // 停止计时器并跳转
+                stopTimer();
+                console.log('生成成功，跳转到:', data.redirect);
+                window.location.href = data.redirect;
+            } else if (data && data.redirect) {
+                // 兼容旧格式
+                stopTimer();
+                console.log('生成成功，跳转到:', data.redirect);
+                window.location.href = data.redirect;
+            } else {
+                console.error('无法处理的响应格式:', data);
+                throw new Error('响应格式错误');
+            }
+        })
+        .catch(error => {
+            // 清除超时
+            clearTimeout(timeoutId);
+            console.error('生成报告失败:', error);
+            
+            // 检查是否是超时错误
+            if (error.name === 'AbortError') {
+                errorMessage.textContent = '请求超时（超过2分钟），请稍后重试';
+            } else {
+                errorMessage.textContent = error.message || '未知错误';
+            }
+            
+            errorAlert.style.display = 'block';
+            loadingAlert.style.display = 'none';
+            
+            // 恢复按钮状态
+            resetForm();
+        });
+    });
+
+    function startTimer() {
+        timerInterval = setInterval(function() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            
+            let timeText;
+            if (minutes > 0) {
+                timeText = `${minutes}分${seconds}秒`;
+            } else {
+                timeText = `${seconds}秒`;
+            }
+            
+            loadingMessage.textContent = `等待 AI 返回内容中，已等待 ${timeText}`;
+            
+            // 根据等待时间调整提示信息
+            if (elapsed > 60) {
+                loadingTitle.textContent = '正在生成报告（处理时间较长）...';
+            } else if (elapsed > 30) {
+                loadingTitle.textContent = '正在生成报告（即将完成）...';
+            }
+        }, 1000);
+    }
+    
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    function resetForm() {
+        generateBtn.disabled = false;
+        btnText.textContent = '生成';
+        btnSpinner.style.display = 'none';
+        loadingTitle.textContent = '正在生成报告...';
+        loadingMessage.textContent = '等待 AI 返回内容中，请稍候';
+        
+        // 停止计时器
+        stopTimer();
+        
+        // 恢复表单输入
+        const inputs = form.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.disabled = false;
+            input.readOnly = false;
+            input.style.pointerEvents = '';
+            input.style.opacity = '';
+        });
+    }
+});
+</script>
 {% endblock %}

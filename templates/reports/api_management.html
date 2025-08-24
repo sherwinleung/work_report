@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>API 管理</h3>
+  <a class="btn btn-outline-secondary btn-sm" href="/reports/">
+    <i class="fas fa-arrow-left me-2"></i>返回AI汇报
+  </a>
+</div>
+
+<!-- 显示消息 -->
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endif %}
+
+<!-- 当前启用的API配置 -->
+{% if active_config %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="card-title text-success">
+      <i class="fas fa-check-circle me-2"></i>当前启用: {{ active_config.get_provider_display }}
+    </h6>
+    <p class="card-text text-muted mb-1">
+      <strong>API Key:</strong> {{ active_config.api_key|slice:":20" }}...
+    </p>
+    <p class="card-text text-muted mb-0">
+      <strong>API服务器:</strong> {{ active_config.api_base|default:"默认" }}
+    </p>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+  <i class="fas fa-exclamation-triangle me-2"></i>
+  您还没有启用任何API配置，请先配置并启用一个API
+</div>
+{% endif %}
+
+<!-- API配置列表 -->
+<div class="row">
+  <div class="col-md-8">
+    <h5>我的API配置</h5>
+    {% if configs %}
+      {% for config in configs %}
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h6 class="card-title">
+                {{ config.get_provider_display }}
+                {% if config.is_active %}
+                  <span class="badge bg-success ms-2">启用中</span>
+                {% else %}
+                  <span class="badge bg-secondary ms-2">未启用</span>
+                {% endif %}
+              </h6>
+              <p class="card-text text-muted mb-1">
+                <strong>API Key:</strong> {{ config.api_key|slice:":20" }}...
+              </p>
+              <p class="card-text text-muted mb-2">
+                <strong>API服务器:</strong> {{ config.api_base|default:"默认" }}
+              </p>
+              <small class="text-muted">创建时间: {{ config.created_at|date:"Y-m-d H:i" }}</small>
+            </div>
+            <div class="btn-group-vertical" role="group">
+              {% if not config.is_active %}
+              <form method="post" style="display: inline;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="activate">
+                <input type="hidden" name="config_id" value="{{ config.id }}">
+                <button type="submit" class="btn btn-outline-success btn-sm">启用</button>
+              </form>
+              {% endif %}
+              <button type="button" class="btn btn-outline-primary btn-sm mt-1" 
+                      onclick="editConfig('{{ config.provider }}', '{{ config.api_key }}', '{{ config.api_base }}')">
+                编辑
+              </button>
+              <form method="post" style="display: inline;" 
+                    onsubmit="return confirm('确定要删除这个API配置吗？')">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="config_id" value="{{ config.id }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm mt-1">删除</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        您还没有配置任何API，请在右侧添加新的API配置
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- 添加/编辑API配置 -->
+  <div class="col-md-4">
+    <h5>添加/编辑API配置</h5>
+    <form method="post" id="api-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_config">
+      
+      <div class="mb-3">
+        <label for="provider" class="form-label">API提供商</label>
+        <select class="form-select" name="provider" id="provider" required onchange="updatePlaceholders()">
+          <option value="">请选择提供商</option>
+          {% for provider in all_providers %}
+          <option value="{{ provider.key }}">{{ provider.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="api_key" class="form-label">API Key</label>
+        <input type="text" class="form-control" name="api_key" id="api_key" required
+               placeholder="输入您的API密钥">
+      </div>
+
+      <div class="mb-3">
+        <label for="api_base" class="form-label">API服务器 (可选)</label>
+        <input type="url" class="form-control" name="api_base" id="api_base"
+               placeholder="留空使用默认服务器">
+        <div class="form-text" id="api-base-help">
+          <!-- 动态帮助文本 -->
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary">保存配置</button>
+        <button type="button" class="btn btn-outline-info" onclick="testConnection()">测试连接</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">重置</button>
+      </div>
+    </form>
+
+    <!-- API使用说明 -->
+    <div class="mt-4">
+      <h6>使用说明</h6>
+      <div class="accordion" id="apiHelp">
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#openai-help">
+              OpenAI
+            </button>
+          </h2>
+          <div id="openai-help" class="accordion-collapse collapse" data-bs-parent="#apiHelp">
+            <div class="accordion-body">
+              <p class="text-muted small">
+                需要OpenAI API Key。<br>
+                默认使用 gpt-3.5-turbo 模型。<br>
+                <strong>代理服务:</strong> LLMHub等国内代理，服务器填写 <code>https://llmhub.app</code><br>
+                <strong>官方:</strong> 留空或填写 <code>https://api.openai.com</code>
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#deepseek-help">
+              DeepSeek
+            </button>
+          </h2>
+          <div id="deepseek-help" class="accordion-collapse collapse" data-bs-parent="#apiHelp">
+            <div class="accordion-body">
+              <p class="text-muted small">
+                需要DeepSeek API Key。<br>
+                使用 deepseek-chat 模型。<br>
+                <strong>官方:</strong> 留空或填写 <code>https://api.deepseek.com</code>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#claude-help">
+              Claude
+            </button>
+          </h2>
+          <div id="claude-help" class="accordion-collapse collapse" data-bs-parent="#apiHelp">
+            <div class="accordion-body">
+              <p class="text-muted small">
+                需要Anthropic API Key。<br>
+                使用 claude-3-haiku-20240307 模型。<br>
+                <strong>官方:</strong> 留空或填写 <code>https://api.anthropic.com</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function updatePlaceholders() {
+  const provider = document.getElementById('provider').value;
+  const apiBaseInput = document.getElementById('api_base');
+  const helpText = document.getElementById('api-base-help');
+  
+  if (provider === 'openai') {
+    apiBaseInput.placeholder = 'https://llmhub.app 或 https://api.openai.com';
+    helpText.innerHTML = '推荐使用 LLMHub 代理: <code>https://llmhub.app</code>';
+  } else if (provider === 'deepseek') {
+    apiBaseInput.placeholder = 'https://api.deepseek.com';
+    helpText.innerHTML = '官方API: <code>https://api.deepseek.com</code>';
+  } else if (provider === 'claude') {
+    apiBaseInput.placeholder = 'https://api.anthropic.com';
+    helpText.innerHTML = '官方API: <code>https://api.anthropic.com</code>';
+  } else {
+    apiBaseInput.placeholder = '留空使用默认服务器';
+    helpText.innerHTML = '';
+  }
+}
+
+function editConfig(provider, apiKey, apiBase) {
+  document.getElementById('provider').value = provider;
+  document.getElementById('api_key').value = apiKey;
+  document.getElementById('api_base').value = apiBase;
+  updatePlaceholders();
+  
+  // 滚动到表单
+  document.getElementById('api-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetForm() {
+  document.getElementById('api-form').reset();
+  updatePlaceholders();
+}
+
+function testConnection() {
+  const provider = document.getElementById('provider').value;
+  const apiKey = document.getElementById('api_key').value;
+  const apiBase = document.getElementById('api_base').value;
+  
+  if (!provider || !apiKey) {
+    alert('请先选择提供商并输入API Key');
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('provider', provider);
+  formData.append('api_key', apiKey);
+  formData.append('api_base', apiBase);
+  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+  
+  // 显示加载状态
+  const button = event.target;
+  const originalText = button.textContent;
+  button.textContent = '测试中...';
+  button.disabled = true;
+  
+  fetch('/reports/test-api/', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('✅ ' + data.message);
+    } else {
+      alert('❌ ' + data.message);
+    }
+  })
+  .catch(error => {
+    alert('❌ 测试失败: ' + error.message);
+  })
+  .finally(() => {
+    button.textContent = originalText;
+    button.disabled = false;
+  });
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+  updatePlaceholders();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+# 生产环境依赖包
+Django==5.0.6
+djangorestframework==3.15.2
+python-dotenv==1.0.1
+requests==2.32.3
+openai>=1.40.0
+
+# 生产环境数据库
+mysqlclient==2.2.4  # MySQL客户端
+# psycopg2-binary==2.9.9  # PostgreSQL客户端（可选）
+dj-database-url==2.2.0  # 数据库URL解析
+
+# 生产环境服务器
+gunicorn==21.2.0
+whitenoise==6.6.0  # 静态文件服务
+
+# 缓存
+redis==5.0.1
+django-redis==5.4.0
+
+# 监控和日志
+sentry-sdk[django]==1.40.6  # 错误监控（可选）
+
+# 安全和性能
+django-cors-headers==4.3.1  # CORS支持（如果需要前后端分离）
+django-ratelimit==4.1.0  # 请求频率限制
+
+# 其他工具
+celery==5.3.4  # 异步任务队列（如果需要）
+flower==2.0.1  # Celery监控（如果使用Celery）
