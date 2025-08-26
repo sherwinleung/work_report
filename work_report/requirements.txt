@@ -1,0 +1,11 @@
+Django==5.0.6
+djangorestframework==3.15.2
+python-dotenv==1.0.1
+requests==2.32.3
+openai>=1.40.0
+
+# 生产环境可选依赖（可根据需要启用）
+# mysqlclient==2.2.4  # MySQL数据库支持
+# gunicorn==21.2.0    # WSGI服务器
+# redis==5.0.1        # Redis缓存
+# django-redis==5.4.0 # Django Redis集成

@@ -62,15 +62,6 @@ def report_generate(request):
             entries_qs = WorkEntry.objects.filter(user=request.user, date__range=(start_date, end_date)).values("date","title","content","duration_minutes").order_by("date","id")
             entries = list(entries_qs)
 
-            # 检查是否有工作记录数据
-            if not entries:
-                error_msg = f"该日期内无工作记录（{start_date_str} 至 {end_date_str}），请先记录工作内容再生成汇报"
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({"error": error_msg}, status=400)
-                else:
-                    messages.error(request, error_msg)
-                    return redirect("report_generate")
-
             rep = Report.objects.create(user=request.user, granularity=granularity,
                                         start_date=start_date, end_date=end_date,
                                         prompt_prefs=extra_prompt, status="RUNNING")

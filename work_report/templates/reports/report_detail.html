@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>汇报详情</h3>
+<div class="card"><div class="card-body">
+<p>状态：<span class="badge bg-info">{{ rep.status }}</span></p>
+<p>范围：{{ rep.start_date }} ~ {{ rep.end_date }}（{{ rep.granularity }}）</p>
+<a class="btn btn-outline-secondary btn-sm" href="?download=md">下载Markdown</a>
+<hr>
+<pre style="white-space: pre-wrap">{{ rep.content_md }}</pre>
+</div></div>
+{% endblock %}

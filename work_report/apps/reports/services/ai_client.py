@@ -2,66 +2,23 @@ import os, requests
 from django.conf import settings
 
 def _build_prompt(entries, granularity, start_date, end_date, extra_prompt=""):
-    # 根据粒度调整报告结构
-    if granularity == "daily":
-        structure = [
-            "## 今日工作总结",
-            "- 简要概括今天完成的主要工作（2-3行，突出重点和成果）",
-            "- 如有重要问题或需要关注的事项，简单说明",
-            "- 明天计划（如果有重要安排）"
-        ]
-    elif granularity == "weekly":
-        structure = [
-            "## 本周工作概要",
-            "- 总结本周主要工作成果（3-5个要点，包含数据）",
-            "- 重点项目进展或完成情况",
-            "- 遇到的主要问题及解决情况（如有）",
-            "- 下周重点工作计划"
-        ]
-    elif granularity == "monthly":
-        structure = [
-            "## 本月工作回顾",
-            "- 月度主要成果和关键指标",
-            "- 重要项目完成情况",
-            "- 存在的问题和改进措施",
-            "- 下月工作重点"
-        ]
-    else:  # yearly or custom
-        structure = [
-            "## 工作总结",
-            "- 期间主要工作成果",
-            "- 关键项目和数据指标",
-            "- 问题与改进建议",
-            "- 后续工作安排"
-        ]
-    
     lines = [
-        "你是我的职场助理，请根据工作记录生成简洁、实用的工作汇报。",
-        f"时间范围：{start_date} 至 {end_date}",
-        "",
-        "**汇报要求：**",
-        "- 语言简洁明了，避免冗余和套话",
-        "- 突出关键成果和数据，不要流水账",
-        "- 重点说实际工作内容，少用形容词",
-        "- 如果工作简单，就简单总结，不要强行复杂化"
+        "你是我的职场助理，请根据以下工作记录生成清晰、有条理、适合向领导汇报的总结性工作汇报。",
+        f"时间范围：{start_date} 至 {end_date}；粒度：{granularity}",
+        "请输出：",
+        "1) 概要（3-6条要点，带数据）；",
+        "2) 本期关键成果（条目列表，含量化指标/影响）；",
+        "3) 遇到的问题与风险（含原因与解决建议）；",
+        "4) 下阶段计划与资源需求；",
+        "5) 附：本期工作明细（按日期简单归类）",
     ]
-    
-    lines.extend([""] + structure)
-    
     if extra_prompt:
-        lines.append(f"\n**补充要求：** {extra_prompt}")
-    
-    # 添加工作数据
-    lines.append("\n**工作数据：**")
-    total_hours = 0
+        lines.append(f"补充偏好：{extra_prompt}")
+    lines.append("\n【工作明细】")
     for e in entries:
         mins = e.get('duration_minutes') or 0
         hrs = round(mins / 60.0, 2)
-        total_hours += hrs
-        lines.append(f"- {e['date']} | {e.get('title', '未命名')} ({hrs}h) | {e['content']}")
-    
-    lines.insert(-len(entries)-1, f"总工时：{round(total_hours, 1)}小时")
-    
+        lines.append(f"- {e['date']} | {e.get('title') or ''} | {hrs} 小时 | {e['content']}".strip())
     return "\n".join(lines)
 
 def generate_report(entries, granularity, start_date, end_date, extra_prompt="", user=None):
@@ -110,12 +67,12 @@ def generate_report(entries, granularity, start_date, end_date, extra_prompt="",
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "你是职场汇报助理。生成简洁、实用的工作汇报，避免空话套话，重点突出实际工作成果。输出Markdown格式。"},
+                    {"role": "system", "content": "你是一个严谨的中文职场报告助理。输出Markdown，结构化清晰。"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.2,  # 降低随机性，让输出更一致
-                max_tokens=1500,  # 减少token数，鼓励简洁
-                timeout=60
+                temperature=0.3,
+                max_tokens=2000,
+                timeout=60  # 增加超时时间到60秒
             )
             
             if hasattr(response, 'choices') and len(response.choices) > 0:
@@ -145,11 +102,11 @@ def generate_report(entries, granularity, start_date, end_date, extra_prompt="",
             data = {
                 "model": "deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": "你是职场汇报助理。生成简洁、实用的工作汇报，避免空话套话，重点突出实际工作成果。输出Markdown格式。"},
+                    {"role": "system", "content": "你是一个严谨的中文职场报告助理。输出Markdown，结构化清晰。"},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.2,
-                "max_tokens": 1500
+                "temperature": 0.3,
+                "max_tokens": 2000
             }
             
             response = requests.post(url, headers=headers, json=data, timeout=120)
@@ -170,8 +127,7 @@ def generate_report(entries, granularity, start_date, end_date, extra_prompt="",
             }
             data = {
                 "model": "claude-3-haiku-20240307",
-                "max_tokens": 1500,
-                "system": "你是职场汇报助理。生成简洁、实用的工作汇报，避免空话套话，重点突出实际工作成果。输出Markdown格式。",
+                "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}]
             }
             

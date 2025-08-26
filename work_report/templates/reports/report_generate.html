@@ -158,22 +158,10 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 console.error('请求失败:', response.status, response.statusText);
                 // 尝试获取详细错误信息
-                return response.text().then(text => {
-                    try {
-                        const errorData = JSON.parse(text);
-                        console.log('解析到错误数据:', errorData);
-                        // 直接返回错误数据，而不是抛出异常
-                        return { 
-                            success: false, 
-                            error: errorData.error || `HTTP ${response.status}: ${response.statusText}` 
-                        };
-                    } catch (jsonError) {
-                        console.error('JSON解析失败，响应内容:', text);
-                        return { 
-                            success: false, 
-                            error: `HTTP ${response.status}: ${response.statusText}` 
-                        };
-                    }
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }).catch(() => {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 });
             }
         })
